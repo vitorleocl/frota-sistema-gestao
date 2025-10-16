@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Gestão de Frota</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .tabs {
+            display: flex;
+            background: #f8f9fa;
+            border-bottom: 2px solid #dee2e6;
+            overflow-x: auto;
+        }
+
+        .tab {
+            padding: 15px 30px;
+            cursor: pointer;
+            border: none;
+            background: transparent;
+            font-size: 1em;
+            font-weight: 600;
+            color: #6c757d;
+            transition: all 0.3s;
+            white-space: nowrap;
+        }
+
+        .tab:hover {
+            background: #e9ecef;
+        }
+
+        .tab.active {
+            background: white;
+            color: #667eea;
+            border-bottom: 3px solid #667eea;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.5s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .filters {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .filter-group label {
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #495057;
+        }
+
+        .filter-group select {
+            padding: 10px;
+            border: 2px solid #dee2e6;
+            border-radius: 5px;
+            font-size: 0.95em;
+            transition: border-color 0.3s;
+        }
+
+        .filter-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            transition: transform 0.3s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-card h3 {
+            font-size: 0.9em;
+            opacity: 0.9;
+            margin-bottom: 10px;
+        }
+
+        .stat-card .value {
+            font-size: 2em;
+            font-weight: bold;
+        }
+
+        .chart-container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+
+        .chart-container h2 {
+            margin-bottom: 20px;
+            color: #495057;
+        }
+
+        .table-container {
+            overflow-x: auto;
+            margin-top: 20px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #495057;
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+
+        .update-info {
+            text-align: center;
+            padding: 10px;
+            background: #d1ecf1;
+            color: #0c5460;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        .btn-refresh {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+            margin-left: 10px;
+            transition: background 0.3s;
+        }
+
+        .btn-refresh:hover {
+            background: #764ba2;
+        }
+
+        canvas {
+            max-height: 400px;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 1.8em;
+            }
+            .content {
+                padding: 15px;
+            }
+            .stat-card .value {
+                font-size: 1.5em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚛 Sistema de Gestão de Frota</h1>
+            <p>Dashboard Integrado - Ativos, Telemetria e Abastecimento</p>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('overview', this)">📊 Visão Geral</button>
+            <button class="tab" onclick="switchTab('telemetry', this)">📡 Telemetria</button>
+            <button class="tab" onclick="switchTab('fuel', this)">⛽ Abastecimento</button>
+            <button class="tab" onclick="switchTab('comparison', this)">🔄 Comparativo KM</button>
+            <button class="tab" onclick="switchTab('efficiency', this)">⚡ Eficiência</button>
+            <button class="tab" onclick="switchTab('maintenance', this)">🔧 Manutenção</button>
+        </div>
+
+        <div class="content">
+            <div class="update-info">
+                Última atualização: <span id="lastUpdate">Carregando...</span>
+                <button class="btn-refresh" onclick="loadAllData()">🔄 Atualizar</button>
+            </div>
+
+            <!-- TAB: Visão Geral -->
+            <div id="overview" class="tab-content active">
+                <div class="filters">
+                    <div class="filter-group">
+                        <label>Tipo de Ativo</label>
+                        <select id="filterTipo" onchange="applyFilters()">
+                            <option value="">Todos</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Unidade</label>
+                        <select id="filterUnidade" onchange="applyFilters()">
+                            <option value="">Todas</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Status</label>
+                        <select id="filterStatus" onchange="applyFilters()">
+                            <option value="">Todos</option>
+                            <option value="Ativo">Ativo</option>
+                            <option value="Inativo">Inativo</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h3>Total de Ativos</h3>
+                        <div class="value" id="totalAtivos">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>KM Total Rodados</h3>
+                        <div class="value" id="totalKm">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Litros Consumidos</h3>
+                        <div class="value" id="totalLitros">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Média KM/L</h3>
+                        <div class="value" id="mediaKmL">0</div>
+                    </div>
+                </div>
+
+                <div class="chart-container">
+                    <h2>Distribuição de Ativos por Tipo</h2>
+                    <canvas id="chartTipos"></canvas>
+                </div>
+
+                <div class="chart-container">
+                    <h2>Top 10 Ativos por KM Rodados</h2>
+                    <canvas id="chartTopKm"></canvas>
+                </div>
+            </div>
+
+            <!-- TAB: Telemetria -->
+            <div id="telemetry" class="tab-content">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h3>Ociosidade Média</h3>
+                        <div class="value" id="ociosidadeMedia">0%</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Deslocamento Total</h3>
+                        <div class="value" id="deslocamentoTotal">0 km</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Horas Trabalhadas</h3>
+                        <div class="value" id="horasTrabalhadas">0h</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Veículos Ativos</h3>
+                        <div class="value" id="veiculosAtivos">0</div>
+                    </div>
+                </div>
+
+                <div class="chart-container">
+                    <h2>Ociosidade por Veículo</h2>
+                    <canvas id="chartOciosidade"></canvas>
+                </div>
+
+                <div class="chart-container">
+                    <h2>Deslocamento Diário</h2>
+                    <canvas id="chartDeslocamento"></canvas>
+                </div>
+            </div>
+
+            <!-- TAB: Abastecimento -->
+            <div id="fuel" class="tab-content">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h3>Custo Total</h3>
+                        <div class="value" id="custoTotal">R$ 0</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Volume Total</h3>
+                        <div class="value" id="volumeTotal">0 L</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Preço Médio/L</h3>
+                        <div class="value" id="precoMedio">R$ 0</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Abastecimentos</h3>
+                        <div class="value" id="totalAbast">0</div>
+                    </div>
+                </div>
+
+                <div class="chart-container">
+                    <h2>Evolução de Abastecimento</h2>
+                    <canvas id="chartAbastecimento"></canvas>
+                </div>
+
+                <div class="chart-container">
+                    <h2>Consumo por Veículo</h2>
+                    <canvas id="chartConsumoPorVeiculo"></canvas>
+                </div>
+            </div>
+
+            <!-- TAB: Comparativo -->
+            <div id="comparison" class="tab-content">
+                <h2>🔍 Análise Comparativa: Telemetria vs Abastecimento</h2>
+                <p style="margin-bottom: 20px; color: #6c757d;">Comparação entre KM registrados</p>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h3>Divergência Média</h3>
+                        <div class="value" id="divergenciaMedia">0%</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Veículos com Alerta</h3>
+                        <div class="value" id="veiculosAlerta">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>KM Telemetria</h3>
+                        <div class="value" id="kmTelemetria">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>KM Abastecimento</h3>
+                        <div class="value" id="kmAbastecimento">0</div>
+                    </div>
+                </div>
+
+                <div class="chart-container">
+                    <h2>Comparativo KM</h2>
+                    <canvas id="chartComparativo"></canvas>
+                </div>
+
+                <div class="table-container">
+                    <h3>Detalhamento de Divergências</h3>
+                    <table id="tableDivergencias">
+                        <thead>
+                            <tr>
+                                <th>Veículo</th>
+                                <th>KM Telemetria</th>
+                                <th>KM Abastecimento</th>
+                                <th>Diferença</th>
+                                <th>Divergência %</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- TAB: Eficiência -->
+            <div id="efficiency" class="tab-content">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h3>Melhor Eficiência</h3>
+                        <div class="value" id="melhorEficiencia">0 km/L</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Pior Eficiência</h3>
+                        <div class="value" id="piorEficiencia">0 km/L</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Economia Potencial</h3>
+                        <div class="value" id="economiaPotencial">R$ 0</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Eficiência Geral</h3>
+                        <div class="value" id="eficienciaGeral">0 km/L</div>
+                    </div>
+                </div>
+
+                <div class="chart-container">
+                    <h2>Ranking de Eficiência</h2>
+                    <canvas id="chartEficiencia"></canvas>
+                </div>
+
+                <div class="chart-container">
+                    <h2>Consumo vs Deslocamento</h2>
+                    <canvas id="chartConsumoDeslocamento"></canvas>
+                </div>
+            </div>
+
+            <!-- TAB: Manutenção -->
+            <div id="maintenance" class="tab-content">
+                <div style="text-align: center; padding: 50px; color: #6c757d;">
+                    <h2>🔧 Módulo de Manutenção</h2>
+                    <p style="margin-top: 20px;">Preparado para integração futura</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configurações
+        const API_CONFIG = {
+            ATIVOS: 'https://script.google.com/macros/s/AKfycbz5STzZiNohIKsgjwRrhS04Aqb0yHjx_WeNQA0FWHAOJ6f9X-QFd3ZxH6twHp0Lt6V9/exec',
+            TELEMETRIA: 'https://script.google.com/macros/s/AKfycbz4zmj7_ATvpNispXHvXpjd0YNOipnQGKnzL8cm7dKQdRZoPtaWeHHmPGOoaab9fztl/exec',
+            ABASTECIMENTO: 'https://script.google.com/macros/s/AKfycbycZrGWpmVGMnZgfaZ7W2jUDydeDw0Y95efpHASi95r91FYfGah8bYkEwARqCKgEZ-CbQ/exec'
+        };
+
+        const CONFIG = {
+            AUTO_UPDATE_INTERVAL: 5 * 60 * 1000,
+            ALERT_THRESHOLD: 10,
+            WARNING_THRESHOLD: 5,
+            AVERAGE_FUEL_PRICE: 6.00
+        };
+
+        let ativos = [];
+        let telemetria = [];
+        let abastecimento = [];
+        let charts = {};
+
+        // Função para trocar de aba - CORRIGIDA
+        function switchTab(tabName, element) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            
+            if (element) {
+                element.classList.add('active');
+            }
+            
+            document.getElementById(tabName).classList.add('active');
+        }
+
+        // Carregar dados
+        async function loadAllData() {
+            try {
+                document.getElementById('lastUpdate').textContent = 'Carregando...';
+                
+                const [ativosData, telemetriaData, abastecimentoData] = await Promise.all([
+                    fetch(API_CONFIG.ATIVOS).then(r => r.json()),
+                    fetch(API_CONFIG.TELEMETRIA).then(r => r.json()),
+                    fetch(API_CONFIG.ABASTECIMENTO).then(r => r.json())
+                ]);
+
+                ativos = ativosData;
+                telemetria = telemetriaData;
+                abastecimento = abastecimentoData;
+
+                console.log('Dados carregados:', { ativos: ativos.length, telemetria: telemetria.length, abastecimento: abastecimento.length });
+
+                populateFilters();
+                updateAllDashboards();
+                
+                document.getElementById('lastUpdate').textContent = new Date().toLocaleString('pt-BR');
+            } catch (error) {
+                console.error('Erro:', error);
+                document.getElementById('lastUpdate').textContent = 'Erro ao carregar';
+                alert('Erro ao carregar dados. Verifique o console (F12)');
+            }
+        }
+
+        function populateFilters() {
+            const tipos = [...new Set(ativos.map(a => a.tipo || a.Tipo))].filter(Boolean);
+            const unidades = [...new Set(ativos.map(a => a.unidade || a.Unidade))].filter(Boolean);
+            
+            const filterTipo = document.getElementById('filterTipo');
+            const filterUnidade = document.getElementById('filterUnidade');
+            
+            filterTipo.innerHTML = '<option value="">Todos</option>';
+            filterUnidade.innerHTML = '<option value="">Todas</option>';
+            
+            tipos.forEach(tipo => {
+                filterTipo.innerHTML += `<option value="${tipo}">${tipo}</option>`;
+            });
+            
+            unidades.forEach(unidade => {
+                filterUnidade.innerHTML += `<option value="${unidade}">${unidade}</option>`;
+            });
+        }
+
+        function updateAllDashboards() {
+            updateOverview();
+            updateTelemetry();
+            updateFuel();
+            updateComparison();
+            updateEfficiency();
+        }
+
+        function applyFilters() {
+            updateAllDashboards();
+        }
+
+        function getFilteredAtivos() {
+            const tipo = document.getElementById('filterTipo')?.value || '';
+            const unidade = document.getElementById('filterUnidade')?.value || '';
+            const status = document.getElementById('filterStatus')?.value || '';
+
+            return ativos.filter(a => {
+                if (tipo && (a.tipo || a.Tipo) !== tipo) return false;
+                if (unidade && (a.unidade || a.Unidade) !== unidade) return false;
+                if (status && (a.status || a.Status) !== status) return false;
+                return true;
+            });
+        }
+
+        function createChart(canvasId, config) {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+            if (charts[canvasId]) charts[canvasId].destroy();
+            charts[canvasId] = new Chart(canvas, config);
+        }
+
+        function updateOverview() {
+            const filteredAtivos = getFilteredAtivos();
+            document.getElementById('totalAtivos').textContent = filteredAtivos.length;
+            
+            const totalKm = telemetria.reduce((sum, t) => sum + (parseFloat(t.deslocamento) || 0), 0);
+            document.getElementById('totalKm').textContent = totalKm.toFixed(0) + ' km';
+            
+            const totalLitros = abastecimento.reduce((sum, a) => sum + (parseFloat(a.litros) || parseFloat(a.quantidade) || 0), 0);
+            document.getElementById('totalLitros').textContent = totalLitros.toFixed(0) + ' L';
+            
+            const mediaKmL = totalKm / totalLitros;
+            document.getElementById('mediaKmL').textContent = (mediaKmL || 0).toFixed(2);
+
+            const tipoCount = {};
+            filteredAtivos.forEach(a => {
+                const tipo = a.tipo || a.Tipo || 'Não especificado';
+                tipoCount[tipo] = (tipoCount[tipo] || 0) + 1;
+            });
+
+            createChart('chartTipos', {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(tipoCount),
+                    datasets: [{
+                        data: Object.values(tipoCount),
+                        backgroundColor: ['#667eea', '#764ba2', '#f093fb', '#4facfe', '#43e97b']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { position: 'bottom' } }
+                }
+            });
+
+            const kmPorVeiculo = {};
+            telemetria.forEach(t => {
+                const veiculo = t.veiculo || t.placa || 'N/A';
+                kmPorVeiculo[veiculo] = (kmPorVeiculo[veiculo] || 0) + (parseFloat(t.deslocamento) || 0);
+            });
+
+            const top10 = Object.entries(kmPorVeiculo).sort((a, b) => b[1] - a[1]).slice(0, 10);
+
+            createChart('chartTopKm', {
+                type: 'bar',
+                data: {
+                    labels: top10.map(v => v[0]),
+                    datasets: [{
+                        label: 'KM Rodados',
+                        data: top10.map(v => v[1]),
+                        backgroundColor: '#667eea'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { beginAtZero: true } }
+                }
+            });
+        }
+
+        function updateTelemetry() {
+            document.getElementById('ociosidadeMedia').textContent = '0%';
+            document.getElementById('deslocamentoTotal').textContent = '0 km';
+            document.getElementById('horasTrabalhadas').textContent = '0h';
+            document.getElementById('veiculosAtivos').textContent = '0';
+        }
+
+        function updateFuel() {
+            document.getElementById('custoTotal').textContent = 'R$ 0';
+            document.getElementById('volumeTotal').textContent = '0 L';
+            document.getElementById('precoMedio').textContent = 'R$ 0';
+            document.getElementById('totalAbast').textContent = '0';
+        }
+
+        function updateComparison() {
+            document.getElementById('divergenciaMedia').textContent = '0%';
+            document.getElementById('veiculosAlerta').textContent = '0';
+            document.getElementById('kmTelemetria').textContent = '0';
+            document.getElementById('kmAbastecimento').textContent = '0';
+        }
+
+        function updateEfficiency() {
+            document.getElementById('melhorEficiencia').textContent = '0 km/L';
+            document.getElementById('piorEficiencia').textContent = '0 km/L';
+            document.getElementById('economiaPotencial').textContent = 'R$ 0';
+            document.getElementById('eficienciaGeral').textContent = '0 km/L';
+        }
+
+        // Auto-atualização
+        setInterval(loadAllData, CONFIG.AUTO_UPDATE_INTERVAL);
+
+        // Carregar ao iniciar
+        window.addEventListener('DOMContentLoaded', loadAllData);
+    </script>
+</body>
+</html>
