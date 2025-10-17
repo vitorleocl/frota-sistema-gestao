@@ -261,7 +261,6 @@
                 <button class="btn-refresh" onclick="loadAllData()">🔄 Atualizar</button>
             </div>
 
-            <!-- TAB: Visão Geral -->
             <div id="overview" class="tab-content active">
                 <div class="filters">
                     <div class="filter-group">
@@ -316,7 +315,6 @@
                 </div>
             </div>
 
-            <!-- TAB: Telemetria -->
             <div id="telemetry" class="tab-content">
                 <div class="stats-grid">
                     <div class="stat-card">
@@ -348,7 +346,6 @@
                 </div>
             </div>
 
-            <!-- TAB: Abastecimento -->
             <div id="fuel" class="tab-content">
                 <div class="stats-grid">
                     <div class="stat-card">
@@ -380,7 +377,6 @@
                 </div>
             </div>
 
-            <!-- TAB: Comparativo -->
             <div id="comparison" class="tab-content">
                 <h2>🔍 Análise Comparativa: Telemetria vs Abastecimento</h2>
                 <p style="margin-bottom: 20px; color: #6c757d;">Comparação entre KM registrados</p>
@@ -427,7 +423,6 @@
                 </div>
             </div>
 
-            <!-- TAB: Eficiência -->
             <div id="efficiency" class="tab-content">
                 <div class="stats-grid">
                     <div class="stat-card">
@@ -459,7 +454,6 @@
                 </div>
             </div>
 
-            <!-- TAB: Manutenção -->
             <div id="maintenance" class="tab-content">
                 <div style="text-align: center; padding: 50px; color: #6c757d;">
                     <h2>🔧 Módulo de Manutenção</h2>
@@ -472,7 +466,8 @@
     <script>
         // Configurações
         const API_CONFIG = {
-            ATIVOS: 'https://script.google.com/macros/s/AKfycbz5STzZiNohIKsgjwRrhS04Aqb0yHjx_WeNQA0FWHAOJ6f9X-QFd3ZxH6twHp0Lt6V9/exec',
+            // NOVO LINK PARA OS ATIVOS (Google Sheets Publicado)
+            ATIVOS: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSFg3m2gRlhFtmKMTDcVQW3YmIZXOhlWCN6693HLNHH9kR7GJ7mMayr2U35OOSze6VfJTGOB0GCJsYP/pub?gid=1689333411&single=true&output=csv',
             TELEMETRIA: 'https://script.google.com/macros/s/AKfycbz4zmj7_ATvpNispXHvXpjd0YNOipnQGKnzL8cm7dKQdRZoPtaWeHHmPGOoaab9fztl/exec',
             ABASTECIMENTO: 'https://script.google.com/macros/s/AKfycbycZrGWpmVGMnZgfaZ7W2jUDydeDw0Y95efpHASi95r91FYfGah8bYkEwARqCKgEZ-CbQ/exec'
         };
@@ -488,8 +483,41 @@
         let telemetria = [];
         let abastecimento = [];
         let charts = {};
+        
+        // Função utilitária para converter CSV em JSON
+        function csvToJson(csv) {
+            const lines = csv.split('\n');
+            if (lines.length === 0) return [];
+            
+            // Tratamento para remover retornos de carro e espaços em branco que podem causar problemas
+            const headers = lines[0].trim().split(',').map(h => h.trim().replace(/"/g, '')); 
+            const result = [];
 
-        // Função para trocar de aba - CORRIGIDA
+            for (let i = 1; i < lines.length; i++) {
+                const currentLine = lines[i].trim();
+                if (!currentLine) continue;
+
+                const data = currentLine.split(',').map(d => d.trim().replace(/"/g, ''));
+                if (data.length !== headers.length) {
+                    console.warn(`Linha ${i + 1} ignorada: número de colunas diferente do cabeçalho.`, currentLine);
+                    continue; 
+                }
+                
+                const obj = {};
+                for (let j = 0; j < headers.length; j++) {
+                    // Armazena a chave com a primeira letra em minúsculo para compatibilidade
+                    const key = headers[j].charAt(0).toLowerCase() + headers[j].slice(1);
+                    obj[key] = data[j];
+                    // Mantém a chave original (em maiúsculo/título) também, para evitar quebras
+                    obj[headers[j]] = data[j];
+                }
+                result.push(obj);
+            }
+            return result;
+        }
+
+
+        // Função para trocar de aba 
         function switchTab(tabName, element) {
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
@@ -506,8 +534,13 @@
             try {
                 document.getElementById('lastUpdate').textContent = 'Carregando...';
                 
-                const [ativosData, telemetriaData, abastecimentoData] = await Promise.all([
-                    fetch(API_CONFIG.ATIVOS).then(r => r.json()),
+                // Fetch para a planilha CSV dos Ativos
+                const ativosResponse = await fetch(API_CONFIG.ATIVOS);
+                const ativosCsv = await ativosResponse.text();
+                const ativosData = csvToJson(ativosCsv); 
+
+                // Fetch para as APIs de Telemetria e Abastecimento
+                const [telemetriaData, abastecimentoData] = await Promise.all([
                     fetch(API_CONFIG.TELEMETRIA).then(r => r.json()),
                     fetch(API_CONFIG.ABASTECIMENTO).then(r => r.json())
                 ]);
@@ -530,6 +563,7 @@
         }
 
         function populateFilters() {
+            // Utilizando 'tipo' e 'unidade' para compatibilidade com o CSV e a estrutura do código
             const tipos = [...new Set(ativos.map(a => a.tipo || a.Tipo))].filter(Boolean);
             const unidades = [...new Set(ativos.map(a => a.unidade || a.Unidade))].filter(Boolean);
             
@@ -566,6 +600,7 @@
             const status = document.getElementById('filterStatus')?.value || '';
 
             return ativos.filter(a => {
+                // Utilizando 'tipo' e 'Tipo' para lidar com variações de case nas chaves
                 if (tipo && (a.tipo || a.Tipo) !== tipo) return false;
                 if (unidade && (a.unidade || a.Unidade) !== unidade) return false;
                 if (status && (a.status || a.Status) !== status) return false;
@@ -641,6 +676,7 @@
         }
 
         function updateTelemetry() {
+            // Funções de preenchimento dos outros painéis (sem modificação)
             document.getElementById('ociosidadeMedia').textContent = '0%';
             document.getElementById('deslocamentoTotal').textContent = '0 km';
             document.getElementById('horasTrabalhadas').textContent = '0h';
