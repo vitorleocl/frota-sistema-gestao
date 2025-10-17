@@ -467,6 +467,7 @@
         // Configurações
         const API_CONFIG = {
             // NOVO LINK PARA OS ATIVOS (Google Sheets Publicado)
+            // Mantido o '&output=csv' para forçar a saída CSV.
             ATIVOS: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSFg3m2gRlhFtmKMTDcVQW3YmIZXOhlWCN6693HLNHH9kR7GJ7mMayr2U35OOSze6VfJTGOB0GCJsYP/pub?gid=1689333411&single=true&output=csv',
             TELEMETRIA: 'https://script.google.com/macros/s/AKfycbz4zmj7_ATvpNispXHvXpjd0YNOipnQGKnzL8cm7dKQdRZoPtaWeHHmPGOoaab9fztl/exec',
             ABASTECIMENTO: 'https://script.google.com/macros/s/AKfycbycZrGWpmVGMnZgfaZ7W2jUDydeDw0Y95efpHASi95r91FYfGah8bYkEwARqCKgEZ-CbQ/exec'
@@ -484,32 +485,43 @@
         let abastecimento = [];
         let charts = {};
         
-        // Função utilitária para converter CSV em JSON
+        // Função utilitária MELHORADA para converter CSV em JSON
         function csvToJson(csv) {
-            const lines = csv.split('\n');
-            if (lines.length === 0) return [];
+            const lines = csv.split('\n').filter(line => line.trim() !== '');
+            if (lines.length <= 1) return []; // Retorna vazio se só tiver cabeçalho ou estiver vazio
             
-            // Tratamento para remover retornos de carro e espaços em branco que podem causar problemas
-            const headers = lines[0].trim().split(',').map(h => h.trim().replace(/"/g, '')); 
+            // 1. Processar Cabeçalhos
+            // Remove aspas e normaliza para minúsculas (a planinha pode ter "Veículo" ou "veículo")
+            const headers = lines[0].trim().split(',').map(h => h.replace(/"/g, '').trim().toLowerCase()); 
             const result = [];
 
+            // 2. Processar Dados
             for (let i = 1; i < lines.length; i++) {
                 const currentLine = lines[i].trim();
-                if (!currentLine) continue;
+                
+                // Regex para dividir por vírgula, mas ignorar vírgulas dentro de aspas (CSV padrão)
+                const data = currentLine.match(/(?:[^,"]+|"[^"]*")+/g) || [];
+                
+                // Limpa cada valor: remove aspas, remove \r (retorno de carro), trim.
+                const cleanedData = data.map(d => d.replace(/"/g, '').replace(/\r/g, '').trim());
 
-                const data = currentLine.split(',').map(d => d.trim().replace(/"/g, ''));
-                if (data.length !== headers.length) {
-                    console.warn(`Linha ${i + 1} ignorada: número de colunas diferente do cabeçalho.`, currentLine);
+                if (cleanedData.length === 0 || cleanedData.length !== headers.length) {
+                    console.warn(`Linha ${i + 1} ignorada: número de colunas inválido (${cleanedData.length} vs ${headers.length})`, currentLine);
                     continue; 
                 }
                 
                 const obj = {};
                 for (let j = 0; j < headers.length; j++) {
-                    // Armazena a chave com a primeira letra em minúsculo para compatibilidade
-                    const key = headers[j].charAt(0).toLowerCase() + headers[j].slice(1);
-                    obj[key] = data[j];
-                    // Mantém a chave original (em maiúsculo/título) também, para evitar quebras
-                    obj[headers[j]] = data[j];
+                    const header = headers[j];
+                    const value = cleanedData[j];
+
+                    // Usa o cabeçalho original em minúsculas para consistência no código JS
+                    obj[header] = value; 
+
+                    // Cria também uma chave com a primeira letra em maiúsculo (ex: "Tipo" e "tipo"), 
+                    // caso o código original use a notação TitleCase
+                    const titleCaseHeader = header.charAt(0).toUpperCase() + header.slice(1);
+                    obj[titleCaseHeader] = value;
                 }
                 result.push(obj);
             }
@@ -534,36 +546,46 @@
             try {
                 document.getElementById('lastUpdate').textContent = 'Carregando...';
                 
-                // Fetch para a planilha CSV dos Ativos
+                // 1. Fetch para a planilha CSV dos Ativos
                 const ativosResponse = await fetch(API_CONFIG.ATIVOS);
+                
+                if (!ativosResponse.ok) {
+                    throw new Error(`Erro ao buscar Ativos: ${ativosResponse.statusText}`);
+                }
+
                 const ativosCsv = await ativosResponse.text();
                 const ativosData = csvToJson(ativosCsv); 
 
-                // Fetch para as APIs de Telemetria e Abastecimento
+                // 2. Fetch para as APIs de Telemetria e Abastecimento
                 const [telemetriaData, abastecimentoData] = await Promise.all([
                     fetch(API_CONFIG.TELEMETRIA).then(r => r.json()),
                     fetch(API_CONFIG.ABASTECIMENTO).then(r => r.json())
                 ]);
 
-                ativos = ativosData;
-                telemetria = telemetriaData;
-                abastecimento = abastecimentoData;
+                // 3. Atribuição dos dados (mesmo que alguns retornos sejam arrays vazios, o código não quebra)
+                ativos = Array.isArray(ativosData) ? ativosData : [];
+                telemetria = Array.isArray(telemetriaData) ? telemetriaData : [];
+                abastecimento = Array.isArray(abastecimentoData) ? abastecimentoData : [];
 
                 console.log('Dados carregados:', { ativos: ativos.length, telemetria: telemetria.length, abastecimento: abastecimento.length });
+
+                if (ativos.length === 0) {
+                     console.warn('Base de Ativos carregada, mas retornou 0 registros. Verifique a planilha.');
+                }
 
                 populateFilters();
                 updateAllDashboards();
                 
                 document.getElementById('lastUpdate').textContent = new Date().toLocaleString('pt-BR');
             } catch (error) {
-                console.error('Erro:', error);
-                document.getElementById('lastUpdate').textContent = 'Erro ao carregar';
-                alert('Erro ao carregar dados. Verifique o console (F12)');
+                console.error('Erro no loadAllData:', error);
+                document.getElementById('lastUpdate').textContent = 'Erro ao carregar dados';
+                alert('Erro ao carregar dados. Verifique o console (F12) para detalhes.');
             }
         }
 
         function populateFilters() {
-            // Utilizando 'tipo' e 'unidade' para compatibilidade com o CSV e a estrutura do código
+            // Utilizando 'tipo' e 'unidade' (primeira letra em minúsculo) para consistência
             const tipos = [...new Set(ativos.map(a => a.tipo || a.Tipo))].filter(Boolean);
             const unidades = [...new Set(ativos.map(a => a.unidade || a.Unidade))].filter(Boolean);
             
@@ -584,6 +606,7 @@
 
         function updateAllDashboards() {
             updateOverview();
+            // As demais funções update permanecem iguais
             updateTelemetry();
             updateFuel();
             updateComparison();
@@ -600,7 +623,7 @@
             const status = document.getElementById('filterStatus')?.value || '';
 
             return ativos.filter(a => {
-                // Utilizando 'tipo' e 'Tipo' para lidar com variações de case nas chaves
+                // Acessa as chaves usando a notação em minúsculo, mas mantém a fallback
                 if (tipo && (a.tipo || a.Tipo) !== tipo) return false;
                 if (unidade && (a.unidade || a.Unidade) !== unidade) return false;
                 if (status && (a.status || a.Status) !== status) return false;
@@ -619,18 +642,21 @@
             const filteredAtivos = getFilteredAtivos();
             document.getElementById('totalAtivos').textContent = filteredAtivos.length;
             
+            // Verifica se a telemetria tem dados antes de reduzir
             const totalKm = telemetria.reduce((sum, t) => sum + (parseFloat(t.deslocamento) || 0), 0);
             document.getElementById('totalKm').textContent = totalKm.toFixed(0) + ' km';
             
+            // Verifica se o abastecimento tem dados
             const totalLitros = abastecimento.reduce((sum, a) => sum + (parseFloat(a.litros) || parseFloat(a.quantidade) || 0), 0);
             document.getElementById('totalLitros').textContent = totalLitros.toFixed(0) + ' L';
             
-            const mediaKmL = totalKm / totalLitros;
-            document.getElementById('mediaKmL').textContent = (mediaKmL || 0).toFixed(2);
+            const mediaKmL = totalLitros > 0 ? totalKm / totalLitros : 0;
+            document.getElementById('mediaKmL').textContent = mediaKmL.toFixed(2);
 
+            // Geração de Gráfico
             const tipoCount = {};
             filteredAtivos.forEach(a => {
-                const tipo = a.tipo || a.Tipo || 'Não especificado';
+                const tipo = a.tipo || a.Tipo || 'Não especificado'; // Usa a chave 'tipo' (minúsculo) ou 'Tipo'
                 tipoCount[tipo] = (tipoCount[tipo] || 0) + 1;
             });
 
@@ -649,6 +675,7 @@
                 }
             });
 
+            // Geração de Gráfico Top KM
             const kmPorVeiculo = {};
             telemetria.forEach(t => {
                 const veiculo = t.veiculo || t.placa || 'N/A';
@@ -675,8 +702,11 @@
             });
         }
 
+        // As demais funções de atualização (updateTelemetry, updateFuel, etc.) foram omitidas
+        // aqui para manter o foco na correção do carregamento do ATIVOS, mas estão presentes
+        // no código HTML completo.
+
         function updateTelemetry() {
-            // Funções de preenchimento dos outros painéis (sem modificação)
             document.getElementById('ociosidadeMedia').textContent = '0%';
             document.getElementById('deslocamentoTotal').textContent = '0 km';
             document.getElementById('horasTrabalhadas').textContent = '0h';
